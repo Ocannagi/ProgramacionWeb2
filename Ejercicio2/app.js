@@ -14,17 +14,17 @@ app.use(bodyParser.json());
 
 
 let usuarios = [
-  { id: 1, nombre: 'Emiliano', apellido: 'Martínez', edad: 30, sigueA: [], seguidoPor: [] },
-  { id: 2, nombre: 'Nicolás', apellido: 'Tagliafico', edad: 30, sigueA: [], seguidoPor: [] },
-  { id: 3, nombre: 'Gonzalo', apellido: 'Montiel', edad: 26, sigueA: [], seguidoPor: []},
-  { id: 4, nombre: 'Angel', apellido: 'Di María', edad: 35, sigueA: [], seguidoPor: [] }
+  { id: 1, nombre: 'Emiliano', apellido: 'Martínez', edad: 30, sigueA: [], seguidoPor: [], bloqueados:[] },
+  { id: 2, nombre: 'Nicolás', apellido: 'Tagliafico', edad: 30, sigueA: [], seguidoPor: [], bloqueados:[] },
+  { id: 3, nombre: 'Gonzalo', apellido: 'Montiel', edad: 26, sigueA: [], seguidoPor: [], bloqueados:[]},
+  { id: 4, nombre: 'Angel', apellido: 'Di María', edad: 35, sigueA: [], seguidoPor: [], bloqueados:[] }
 ];
 
 
 app.get('/usuarios', (req, res) => {
   console.log(usuarios);
   let respuesta = usuarios.map(usr => {
-    return {id: usr.id, nombre: usr.nombre, apellido: usr.apellido, sigueA: usr.sigueA, seguidoPor: usr.seguidoPor}; 
+    return {id: usr.id, nombre: usr.nombre, apellido: usr.apellido, sigueA: usr.sigueA, seguidoPor: usr.seguidoPor, bloqueados: usr.bloqueados}; 
   });
   res.json(respuesta);
 });
@@ -77,6 +77,10 @@ app.post('/seguimiento/:usuarioIdSeguidor/:usuarioIdSeguido', (req, res) => {
   const usIdSeguidor = parseInt(usuarioIdSeguidor);
   const usIdSeguido = parseInt(usuarioIdSeguido);
 
+  if(usIdSeguidor === usIdSeguido){
+    return res.status(403).send('Un usuario no puede seguirse a sí mismo');
+  }
+    
   const usIndexSigueA = usuarios.findIndex(u => u.id === usIdSeguidor);
   if (usIndexSigueA === -1) {
     return res.status(404).send('Usuario Seguidor no encontrado');
@@ -86,7 +90,17 @@ app.post('/seguimiento/:usuarioIdSeguidor/:usuarioIdSeguido', (req, res) => {
     return res.status(404).send('Usuario Seguido no encontrado');
   }
 
+  if(usuarios[usIndexSeguidoPor].bloqueados.includes(usIdSeguidor)){
+    return res.status(403).send('El usuario seguido bloqueó al usuario seguidor'); 
+  }
 
+  if(usuarios[usIndexSigueA].bloqueados.includes(usIdSeguido)){
+    return res.status(403).send('El usuario seguidor bloqueó al usuario que quiere seguir');
+  }
+
+  if(usuarios[usIndexSigueA].bloqueados.includes(usIdSeguido)){
+    return res.status(403).send('El usuario seguidor bloqueó al usuario que quiere seguir'); 
+  }
 
   if(!usuarios[usIndexSigueA].sigueA.includes(usIdSeguido)){
     usuarios[usIndexSigueA].sigueA.push(usIdSeguido);
@@ -107,6 +121,10 @@ app.delete('/seguimiento/:usuarioIdSeguidor/:usuarioIdSeguido', (req, res) => {
   const usIdSeguidor = parseInt(usuarioIdSeguidor);
   const usIdSeguido = parseInt(usuarioIdSeguido);
 
+  if(usIdSeguidor === usIdSeguido){
+    return res.status(403).send('Un usuario no puede seguirse a sí mismo');
+  }
+    
   const usIndexSigueA = usuarios.findIndex(u => u.id === usIdSeguidor);
   if (usIndexSigueA === -1) {
     return res.status(404).send('Usuario Seguidor no encontrado');
@@ -116,11 +134,60 @@ app.delete('/seguimiento/:usuarioIdSeguidor/:usuarioIdSeguido', (req, res) => {
     return res.status(404).send('Usuario Seguido no encontrado');
   }
 
+  if(!usuarios[usIndexSigueA].sigueA.includes(usIdSeguido)){
+    return res.status(404).send('Usuario Seguidor no puede dejar de seguir a un usuario que nunca siguió');
+  }
+
   usuarios[usIndexSigueA].sigueA.splice(usuarios[usIndexSigueA].sigueA.indexOf(usIdSeguido), 1);
   usuarios[usIndexSeguidoPor].seguidoPor.splice(usuarios[usIndexSeguidoPor].seguidoPor.indexOf(usIdSeguidor),1);
   res.json('ok');
 
+});
 
+app.post('/bloqueo/:usuarioId/:usuarioIdBloqueado', (req, res) => {
+
+  let {usuarioId, usuarioIdBloqueado} = req.params;
+
+  usuarioId = parseInt(usuarioId);
+  usuarioIdBloqueado = parseInt(usuarioIdBloqueado);
+
+  if(usuarioId === usuarioIdBloqueado){
+    return res.status(404).send('Un usuario no puede bloquearse a sí mismo');
+  }
+    
+  const usIndexBloqueador = usuarios.findIndex(u => u.id === usuarioId);
+  if (usIndexBloqueador === -1) {
+    return res.status(404).send('Usuario Bloqueador no encontrado');
+  }
+  const usIndexBloqueado = usuarios.findIndex(u => u.id === usuarioIdBloqueado);
+  if (usIndexBloqueado === -1) {
+    return res.status(404).send('Usuario a bloquear no encontrado');
+  }
+
+  if(!usuarios[usIndexBloqueador].bloqueados.includes(usuarioIdBloqueado)){
+    usuarios[usIndexBloqueador].bloqueados.push(usuarioIdBloqueado);
+  }
+
+  if(usuarios[usIndexBloqueador].sigueA.includes(usuarioIdBloqueado)){
+    usuarios[usIndexBloqueador].sigueA.splice(usuarios[usIndexBloqueador].sigueA.indexOf(usuarioIdBloqueado), 1);
+  }
+
+  if(usuarios[usIndexBloqueador].seguidoPor.includes(usuarioIdBloqueado)){
+    usuarios[usIndexBloqueador].seguidoPor.splice(usuarios[usIndexBloqueador].sigueA.indexOf(usuarioIdBloqueado), 1);
+  }
+
+  if(usuarios[usIndexBloqueado].sigueA.includes(usuarioId)){
+    usuarios[usIndexBloqueado].sigueA.splice(usuarios[usIndexBloqueado].sigueA.indexOf(usuarioId), 1);
+  }
+
+  if(usuarios[usIndexBloqueado].seguidoPor.includes(usuarioId)){
+    usuarios[usIndexBloqueado].seguidoPor.splice(usuarios[usIndexBloqueado].sigueA.indexOf(usuarioId), 1);
+  }
+
+
+  console.log(usuarios)
+
+  res.json(`El usuario ${usuarios[usIndexBloqueador].id} bloqueó al usuario ${usuarioIdBloqueado}`);
 
 });
 
